@@ -1,10 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { dishes } from "@/data/dishes";
 import { Menu, generateMenu } from "@/lib/menu-engine";
 
-const client = new Anthropic({
+// 云雾API中转站（兼容 OpenAI 格式）
+const client = new OpenAI({
   apiKey: process.env.ANTHROPIC_API_KEY || "dummy-key",
-  // Allow browser-like environments (needed for test environments like jsdom)
+  baseURL: "https://yunwu.ai/v1",
   dangerouslyAllowBrowser: true,
 });
 
@@ -121,22 +122,19 @@ export async function chat(
         ]
       : messages;
 
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5",
+    const response = await client.chat.completions.create({
+      model: "gpt-4o-mini",
       max_tokens: 2048,
-      system: systemPrompt,
-      messages: contextMessages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...contextMessages.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+      ],
     });
 
-    const content = response.content[0];
-    if (content.type !== "text") {
-      throw new Error("Unexpected response type from Claude API");
-    }
-
-    const text = content.text;
+    const text = response.choices[0]?.message?.content || "";
 
     // Try to parse JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
